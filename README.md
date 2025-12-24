@@ -1,4 +1,4 @@
-# Frontend - Periferia Social
+# Frontend - Back-end Periferia Social
 
 ## Requisitos
 - Node.js (v16+)
