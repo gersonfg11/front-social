@@ -48,6 +48,7 @@ postsRouter.get('/', authMiddleware, async (req: AuthRequest, res: Response, nex
       message: post.message,
       createdAt: post.createdAt,
       userAlias: post.user.alias,
+      userId: post.user.id,
       likesCount: post.likes ? post.likes.length : 0
     }));
 
@@ -166,6 +167,40 @@ postsRouter.post('/:id/like', authMiddleware, async (req: AuthRequest, res: Resp
     await likeRepo.save(like);
 
     res.json({ message: 'Like registrado' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+postsRouter.put('/:id', authMiddleware, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+
+    if (!req.userId) {
+      throw new AppError('Usuario no autenticado', 401);
+    }
+
+    if (!message || !message.trim()) {
+      throw new AppError('El mensaje es obligatorio', 400);
+    }
+
+    const postRepo = AppDataSource.getRepository(Post);
+
+    const post = await postRepo.findOne({ where: { id: Number(id) }, relations: ['user'] });
+
+    if (!post) {
+      throw new AppError('Publicación no encontrada', 404);
+    }
+
+    if (post.user.id !== req.userId) {
+      throw new AppError('No tienes permiso para editar esta publicación', 403);
+    }
+
+    post.message = message;
+    await postRepo.save(post);
+
+    res.json({ message: 'Publicación actualizada' });
   } catch (err) {
     next(err);
   }

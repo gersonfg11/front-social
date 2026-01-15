@@ -8,16 +8,19 @@ interface PostItem {
   createdAt: string;
   userAlias: string;
   likesCount: number;
+  userId: number;
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const PostsPage: React.FC = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<number | null>(null);
+  const [editingMessage, setEditingMessage] = useState('');
 
   const fetchPosts = async () => {
     if (!token) return;
@@ -64,6 +67,32 @@ export const PostsPage: React.FC = () => {
     await fetchPosts();
   };
 
+  const startEditingPost = (post: PostItem) => {
+    if (!user) return;
+    setEditingPostId(post.id);
+    setEditingMessage(post.message);
+  };
+
+  const handleUpdatePost = async (postId: number) => {
+    if (!token) return;
+    if (!editingMessage.trim()) return;
+
+    await axios.put(
+      `${API_BASE}/posts/${postId}`,
+      { message: editingMessage },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    setEditingPostId(null);
+    setEditingMessage('');
+    await fetchPosts();
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPostId(null);
+    setEditingMessage('');
+  };
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
       <section className="card">
@@ -89,30 +118,83 @@ export const PostsPage: React.FC = () => {
           <p className="text-sm text-slate-400">No hay publicaciones aún.</p>
         ) : (
           <ul className="space-y-3">
-            {posts.map((post) => (
-              <li key={post.id} className="card">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-primary-500">@{post.userAlias}</span>
-                  <span className="text-xs text-slate-500">
-                    {new Date(post.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <p className="mb-3 text-sm">{post.message}</p>
-                <div className="flex items-center gap-3 text-xs text-slate-400">
-                  <button
-                    type="button"
-                    className="button-primary px-3 py-1 text-xs"
-                    onClick={() => handleLike(post.id)}
-                  >
-                    Like
-                  </button>
-                  <span>{post.likesCount} like(s)</span>
-                </div>
-              </li>
-            ))}
+            {posts.map((post) => {
+              const isOwner = user && post.userId === user.id;
+              const isEditing = editingPostId === post.id;
+
+              return (
+                <li
+                  key={post.id}
+                  className={`card ${isOwner ? 'border border-emerald-500/70 bg-slate-900/60' : ''}`}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-primary-500">
+                      @{post.userAlias}
+                      {isOwner && (
+                        <span className="ml-1 text-xs text-emerald-400">(tú)</span>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">
+                        {new Date(post.createdAt).toLocaleString()}
+                      </span>
+                      {isOwner && !isEditing && (
+                        <button
+                          type="button"
+                          className="text-xs text-emerald-400 hover:underline"
+                          onClick={() => startEditingPost(post)}
+                        >
+                          Editar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing ? (
+                    <>
+                      <textarea
+                        className="input min-h-[80px] resize-none"
+                        value={editingMessage}
+                        onChange={(e) => setEditingMessage(e.target.value)}
+                      />
+                      <div className="mt-2 flex items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          className="button-primary px-3 py-1 text-xs"
+                          onClick={() => handleUpdatePost(post.id)}
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          className="px-3 py-1 text-xs rounded border border-slate-600 hover:bg-slate-800"
+                          onClick={handleCancelEdit}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mb-3 text-sm">{post.message}</p>
+                      <div className="flex items-center gap-3 text-xs text-slate-400">
+                        <button
+                          type="button"
+                          className="button-primary px-3 py-1 text-xs"
+                          onClick={() => handleLike(post.id)}
+                        >
+                          Like
+                        </button>
+                        <span>{post.likesCount} like(s)</span>
+                      </div>
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
     </div>
   );
-};
+}
